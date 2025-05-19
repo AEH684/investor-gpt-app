@@ -202,7 +202,10 @@ if combined_df is not None:
                     temperature=0.2
                 )
                 st.write(reply.choices[0].message['content'])
+
             except Exception as e:
-                st.error("GPT request failed. Check your API key and usage limits.")
+                st.error(f"GPT request failed: {e}")
+#            except Exception as e:
+#                st.error("GPT request failed. Check your API key and usage limits.")
     else:
         st.warning("Cannot generate GPT chat context. Required columns are missing even after mapping.")
