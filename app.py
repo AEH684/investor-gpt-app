@@ -22,10 +22,23 @@ uploaded_files = st.file_uploader("Upload investor spreadsheets", type=["xlsx", 
 
 @st.cache_data
 def load_data(file):
-    if file.name.endswith(".csv"):
-        return pd.read_csv(file)
-    else:
-        return pd.read_excel(file)
+    try:
+        if file.name.endswith(".csv"):
+            df = pd.read_csv(file)
+        else:
+            df = pd.read_excel(file, header=0)
+
+        # Clean up empty rows and columns
+        df.dropna(how='all', inplace=True)
+        df.dropna(axis=1, how='all', inplace=True)
+
+        # Sanity check: if still empty, return None
+        if df.empty or len(df.columns) == 0:
+            return None
+
+        return df
+    except Exception:
+        return None
 
 def clean_and_standardize(df):
     df.columns = df.columns.str.strip().str.lower().str.replace(" ", "_")
@@ -73,8 +86,15 @@ if uploaded_files:
             f.write(file.getbuffer())
 
         df = load_data(file)
+        if df is None:
+            st.warning(f"{file.name} contains no usable data. Please check formatting.")
+            continue
+
         df = clean_and_standardize(df)
         all_dfs.append(df)
+
+    if not all_dfs:
+        st.stop()
 
     combined_df = pd.concat(all_dfs, ignore_index=True)
 
@@ -118,7 +138,6 @@ if uploaded_files:
     st.download_button("Download Cleaned CSV", csv, "cleaned_investors.csv", "text/csv")
     st.download_button("Download JSON", json_data, "cleaned_investors.json", "application/json")
 
-# 🔍 Chat Interface
 if combined_df is not None:
     st.subheader("💬 Ask GPT about your investors")
 
