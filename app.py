@@ -55,6 +55,7 @@ def clean_and_standardize(df):
                 break
 
     df.rename(columns=rename_map, inplace=True)
+    df = df.loc[:, ~df.columns.duplicated()]
     return df
 
 def gpt_tag_status(notes):
@@ -86,6 +87,8 @@ def gpt_summarize_notes(notes):
         return response.choices[0].message['content'].strip()
     except Exception:
         return ""
+
+# ... remainder of the script unchanged ...
 
 # ... remainder of the script unchanged ...
 
