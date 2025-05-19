@@ -43,7 +43,7 @@ def clean_and_standardize(df):
 
     rename_map = {}
     col_map = {
-        'firm': ['firm', 'company', 'organization', 'org'],
+        'firm': ['firm', 'company', 'organization', 'org', 'synergy_list_of_investors_(20_of_61)'],
         'notes': ['notes', 'note', 'investor_note', 'bd_notes', 'comments'],
         'status': ['status', 'stage', 'interest', 'response']
     }
@@ -90,6 +90,9 @@ def gpt_summarize_notes(notes):
         return ""
 
 combined_df = None
+firm_col = 'firm'
+status_col = 'status'
+notes_col = 'notes'
 
 if uploaded_files:
     all_dfs = []
@@ -105,12 +108,23 @@ if uploaded_files:
 
         df = clean_and_standardize(df)
         st.info(f"**{file.name}** loaded with columns: {', '.join(df.columns)}")
+
         all_dfs.append(df)
 
     if not all_dfs:
         st.stop()
 
     combined_df = pd.concat(all_dfs, ignore_index=True)
+
+    required_columns = {'firm', 'status', 'notes'}
+    missing_columns = required_columns - set(combined_df.columns)
+
+    if missing_columns:
+        st.warning(f"Missing expected columns: {', '.join(missing_columns)}")
+        firm_col = st.selectbox("Select firm column", combined_df.columns, key='firm')
+        status_col = st.selectbox("Select status column", combined_df.columns, key='status')
+        notes_col = st.selectbox("Select notes column", combined_df.columns, key='notes')
+        combined_df.rename(columns={firm_col: 'firm', status_col: 'status', notes_col: 'notes'}, inplace=True)
 
     if 'status' not in combined_df.columns and 'notes' in combined_df.columns:
         st.info("No status column found — tagging using GPT...")
@@ -155,12 +169,7 @@ if uploaded_files:
 if combined_df is not None:
     st.subheader("💬 Ask GPT about your investors")
 
-    required_columns = {'firm', 'status', 'notes'}
-    missing_columns = required_columns - set(combined_df.columns)
-
-    if missing_columns:
-        st.warning(f"Cannot generate GPT chat context. Missing columns: {', '.join(missing_columns)}")
-    else:
+    if {'firm', 'status', 'notes'}.issubset(combined_df.columns):
         chat_query = st.chat_input("Ask something like: Who are our active leads from Sequoia?")
 
         if chat_query:
@@ -182,3 +191,5 @@ if combined_df is not None:
                 st.write(reply.choices[0].message['content'])
             except Exception as e:
                 st.error("GPT request failed. Check your API key and usage limits.")
+    else:
+        st.warning("Cannot generate GPT chat context. Required columns are missing even after mapping.")
