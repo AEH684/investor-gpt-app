@@ -61,7 +61,8 @@ def clean_and_standardize(df):
 def gpt_tag_status(notes):
     try:
         response = openai.ChatCompletion.create(
-            model="gpt-4",
+            model="gpt-3.5-turbo",
+#            model="gpt-4",
             messages=[
                 {"role": "system", "content": "Categorize the investor status."},
                 {"role": "user", "content": f"Based on the following investor note, categorize their status as one of: [active, interested, cold, passed, unclear].\n\nNote: {notes}\nStatus:"}
@@ -76,7 +77,8 @@ def gpt_tag_status(notes):
 def gpt_summarize_notes(notes):
     try:
         response = openai.ChatCompletion.create(
-            model="gpt-4",
+            model="gpt-3.5-turbo",
+#            model="gpt-4",
             messages=[
                 {"role": "system", "content": "Summarize investor intent and background."},
                 {"role": "user", "content": f"Summarize the key intent and background from the following investor note:\n{notes}\nSummary:"}
@@ -193,7 +195,8 @@ if combined_df is not None:
 
             try:
                 reply = openai.ChatCompletion.create(
-                    model="gpt-4",
+                    model="gpt-3.5-turbo",
+#                    model="gpt-4",
                     messages=messages,
                     max_tokens=300,
                     temperature=0.2
