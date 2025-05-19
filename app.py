@@ -88,6 +88,9 @@ def gpt_summarize_notes(notes):
     except Exception:
         return ""
 
+
+
+
 combined_df = None
 firm_col = 'firm'
 status_col = 'status'
