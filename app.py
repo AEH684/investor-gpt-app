@@ -88,10 +88,6 @@ def gpt_summarize_notes(notes):
     except Exception:
         return ""
 
-# ... remainder of the script unchanged ...
-
-# ... remainder of the script unchanged ...
-
 combined_df = None
 firm_col = 'firm'
 status_col = 'status'
@@ -111,7 +107,6 @@ if uploaded_files:
 
         df = clean_and_standardize(df)
         st.info(f"**{file.name}** loaded with columns: {', '.join(df.columns)}")
-
         all_dfs.append(df)
 
     if not all_dfs:
@@ -127,7 +122,13 @@ if uploaded_files:
         firm_col = st.selectbox("Select firm column", combined_df.columns, key='firm')
         status_col = st.selectbox("Select status column", combined_df.columns, key='status')
         notes_col = st.selectbox("Select notes column", combined_df.columns, key='notes')
+
+        if len({firm_col, status_col, notes_col}) < 3:
+            st.error("Column selections must be unique. Please choose different columns for firm, status, and notes.")
+            st.stop()
+
         combined_df.rename(columns={firm_col: 'firm', status_col: 'status', notes_col: 'notes'}, inplace=True)
+        combined_df = combined_df.loc[:, ~combined_df.columns.duplicated()]
 
     if 'status' not in combined_df.columns and 'notes' in combined_df.columns:
         st.info("No status column found — tagging using GPT...")
@@ -180,7 +181,10 @@ if combined_df is not None:
             flat_context = json.dumps(context_sample[:25], indent=2)
 
             messages = [
-                {"role": "system", "content": "You are an analyst assistant. The user will ask questions about investor data. Use the following data context to help answer.\n\n" + flat_context},
+                {"role": "system", "content": ("You are an analyst assistant. "
+                                      "The user will ask questions about investor data. "
+                                      "Use the following data context to help answer. " 
+                                      + flat_context)},
                 {"role": "user", "content": chat_query}
             ]
 
