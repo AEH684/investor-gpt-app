@@ -28,11 +28,9 @@ def load_data(file):
         else:
             df = pd.read_excel(file, header=0)
 
-        # Clean up empty rows and columns
         df.dropna(how='all', inplace=True)
         df.dropna(axis=1, how='all', inplace=True)
 
-        # Sanity check: if still empty, return None
         if df.empty or len(df.columns) == 0:
             return None
 
@@ -42,6 +40,21 @@ def load_data(file):
 
 def clean_and_standardize(df):
     df.columns = df.columns.str.strip().str.lower().str.replace(" ", "_")
+
+    rename_map = {}
+    col_map = {
+        'firm': ['firm', 'company', 'organization', 'org'],
+        'notes': ['notes', 'note', 'investor_note', 'bd_notes'],
+        'status': ['status', 'stage', 'interest', 'response']
+    }
+
+    for target, aliases in col_map.items():
+        for alias in aliases:
+            if alias in df.columns:
+                rename_map[alias] = target
+                break
+
+    df.rename(columns=rename_map, inplace=True)
     return df
 
 def gpt_tag_status(notes):
