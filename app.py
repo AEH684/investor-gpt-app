@@ -122,24 +122,30 @@ if uploaded_files:
 if combined_df is not None:
     st.subheader("💬 Ask GPT about your investors")
 
-    chat_query = st.chat_input("Ask something like: Who are our active leads from Sequoia?")
+    required_columns = {'firm', 'status', 'notes'}
+    missing_columns = required_columns - set(combined_df.columns)
 
-    if chat_query:
-        context_sample = combined_df[['firm', 'status', 'notes']].fillna('').to_dict(orient='records')
-        flat_context = json.dumps(context_sample[:25], indent=2)
+    if missing_columns:
+        st.warning(f"Cannot generate GPT chat context. Missing columns: {', '.join(missing_columns)}")
+    else:
+        chat_query = st.chat_input("Ask something like: Who are our active leads from Sequoia?")
 
-        messages = [
-            {"role": "system", "content": "You are an analyst assistant. The user will ask questions about investor data. Use the following data context to help answer.\n\n" + flat_context},
-            {"role": "user", "content": chat_query}
-        ]
+        if chat_query:
+            context_sample = combined_df[['firm', 'status', 'notes']].fillna('').to_dict(orient='records')
+            flat_context = json.dumps(context_sample[:25], indent=2)
 
-        try:
-            reply = openai.ChatCompletion.create(
-                model="gpt-4",
-                messages=messages,
-                max_tokens=300,
-                temperature=0.2
-            )
-            st.write(reply.choices[0].message['content'])
-        except Exception as e:
-            st.error("GPT request failed. Check your API key and usage limits.")
+            messages = [
+                {"role": "system", "content": "You are an analyst assistant. The user will ask questions about investor data. Use the following data context to help answer.\n\n" + flat_context},
+                {"role": "user", "content": chat_query}
+            ]
+
+            try:
+                reply = openai.ChatCompletion.create(
+                    model="gpt-4",
+                    messages=messages,
+                    max_tokens=300,
+                    temperature=0.2
+                )
+                st.write(reply.choices[0].message['content'])
+            except Exception as e:
+                st.error("GPT request failed. Check your API key and usage limits.")
