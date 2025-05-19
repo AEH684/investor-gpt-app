@@ -44,7 +44,7 @@ def clean_and_standardize(df):
     rename_map = {}
     col_map = {
         'firm': ['firm', 'company', 'organization', 'org'],
-        'notes': ['notes', 'note', 'investor_note', 'bd_notes'],
+        'notes': ['notes', 'note', 'investor_note', 'bd_notes', 'comments'],
         'status': ['status', 'stage', 'interest', 'response']
     }
 
