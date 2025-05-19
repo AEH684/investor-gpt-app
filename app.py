@@ -104,6 +104,7 @@ if uploaded_files:
             continue
 
         df = clean_and_standardize(df)
+        st.info(f"**{file.name}** loaded with columns: {', '.join(df.columns)}")
         all_dfs.append(df)
 
     if not all_dfs:
