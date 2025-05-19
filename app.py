@@ -58,36 +58,36 @@ def clean_and_standardize(df):
     return df
 
 def gpt_tag_status(notes):
-    prompt = f"""
-    Based on the following investor note, categorize their status as one of:
-    [active, interested, cold, passed, unclear].
-
-    Note: {notes}
-    Status:
-    """
     try:
-        response = openai.Completion.create(
-            engine="gpt-4",
-            prompt=prompt,
+        response = openai.ChatCompletion.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "Categorize the investor status."},
+                {"role": "user", "content": f"Based on the following investor note, categorize their status as one of: [active, interested, cold, passed, unclear].\n\nNote: {notes}\nStatus:"}
+            ],
             max_tokens=10,
             temperature=0
         )
-        return response.choices[0].text.strip().lower()
+        return response.choices[0].message['content'].strip().lower()
     except Exception:
         return "unclear"
 
 def gpt_summarize_notes(notes):
-    prompt = f"Summarize the key intent and background from the following investor note:\n{notes}\nSummary:".strip()
     try:
-        response = openai.Completion.create(
-            engine="gpt-4",
-            prompt=prompt,
+        response = openai.ChatCompletion.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "Summarize investor intent and background."},
+                {"role": "user", "content": f"Summarize the key intent and background from the following investor note:\n{notes}\nSummary:"}
+            ],
             max_tokens=100,
             temperature=0.3
         )
-        return response.choices[0].text.strip()
+        return response.choices[0].message['content'].strip()
     except Exception:
         return ""
+
+# ... remainder of the script unchanged ...
 
 combined_df = None
 firm_col = 'firm'
