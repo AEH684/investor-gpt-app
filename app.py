@@ -14,6 +14,8 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 
 UPLOAD_DIR = "data/uploads"
 CLEANED_DIR = "data/cleaned"
+ASSISTANT_EXPORT_XLSX = r"C:\\assistant_data\\paul_data_latest.xlsx"
+ASSISTANT_EXPORT_JSON = r"C:\\assistant_data\\paul_data_latest.json"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(CLEANED_DIR, exist_ok=True)
 
@@ -62,7 +64,6 @@ def gpt_tag_status(notes):
     try:
         response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
-#            model="gpt-4",
             messages=[
                 {"role": "system", "content": "Categorize the investor status."},
                 {"role": "user", "content": f"Based on the following investor note, categorize their status as one of: [active, interested, cold, passed, unclear].\n\nNote: {notes}\nStatus:"}
@@ -78,7 +79,6 @@ def gpt_summarize_notes(notes):
     try:
         response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
-#            model="gpt-4",
             messages=[
                 {"role": "system", "content": "Summarize investor intent and background."},
                 {"role": "user", "content": f"Summarize the key intent and background from the following investor note:\n{notes}\nSummary:"}
@@ -89,9 +89,6 @@ def gpt_summarize_notes(notes):
         return response.choices[0].message['content'].strip()
     except Exception:
         return ""
-
-
-
 
 combined_df = None
 firm_col = 'firm'
@@ -169,6 +166,18 @@ if uploaded_files:
     cleaned_path = os.path.join(CLEANED_DIR, cleaned_filename)
     combined_df.to_csv(cleaned_path, index=False)
 
+    # Export cleaned to assistant-accessible Excel
+    try:
+        combined_df.to_excel(ASSISTANT_EXPORT_XLSX, index=False, engine='openpyxl')
+    except Exception as e:
+        st.warning(f"Failed to write Excel to assistant path: {e}")
+
+    # Also export to JSON
+    try:
+        combined_df.to_json(ASSISTANT_EXPORT_JSON, orient='records', indent=2)
+    except Exception as e:
+        st.warning(f"Failed to write JSON to assistant path: {e}")
+
     csv = combined_df.to_csv(index=False).encode('utf-8')
     json_data = combined_df.to_json(orient='records', indent=2).encode('utf-8')
 
@@ -187,16 +196,15 @@ if combined_df is not None:
 
             messages = [
                 {"role": "system", "content": ("You are an analyst assistant. "
-                                      "The user will ask questions about investor data. "
-                                      "Use the following data context to help answer. " 
-                                      + flat_context)},
+                                          "The user will ask questions about investor data. "
+                                          "Use the following data context to help answer. " 
+                                          + flat_context)},
                 {"role": "user", "content": chat_query}
             ]
 
             try:
                 reply = openai.ChatCompletion.create(
                     model="gpt-3.5-turbo",
-#                    model="gpt-4",
                     messages=messages,
                     max_tokens=300,
                     temperature=0.2
@@ -205,7 +213,5 @@ if combined_df is not None:
 
             except Exception as e:
                 st.error(f"GPT request failed: {e}")
-#            except Exception as e:
-#                st.error("GPT request failed. Check your API key and usage limits.")
     else:
         st.warning("Cannot generate GPT chat context. Required columns are missing even after mapping.")
