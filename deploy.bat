@@ -14,7 +14,8 @@ copy /Y "%SOURCE_APP%" "%TARGET_APP%"
 if exist %ZIP_NAME% del %ZIP_NAME%
 
 :: === ZIP (exclude .git and __pycache__) ===
-powershell -Command "Compress-Archive -Path * -DestinationPath %ZIP_NAME% -CompressionLevel Optimal -Force -Exclude '.git', '__pycache__', '*.pyc', '*.pyo'"
+
+powershell -Command "$exclude = @('.git', '__pycache__'); Get-ChildItem -Recurse | Where-Object { $exclude -notcontains $_.Name } | Compress-Archive -DestinationPath '%ZIP_NAME%' -Force"
 
 :: === GIT ADD / COMMIT / TAG / PUSH ===
 git add .
