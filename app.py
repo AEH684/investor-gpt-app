@@ -26,6 +26,10 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(CLEANED_DIR, exist_ok=True)
 os.makedirs(r"C:\\assistant_data", exist_ok=True)
 
+LOG_FILE = os.path.join("logs", "upload_log.csv")
+os.makedirs("logs", exist_ok=True)
+
+
 st.title("📊 Investor Analysis Dashboard")
 
 # 👤 User selector: Paul vs Gene
@@ -165,33 +169,26 @@ notes_col = 'notes'
 with st.sidebar.expander("🛠️ Advanced Upload Options"):
     header_row = st.number_input("Header row (0-indexed)", min_value=0, max_value=100, value=2)
 
-# --- File Upload and Processing ---
-if uploaded_files:
-    all_dfs = []
-    for file in uploaded_files:
-        file_path = os.path.join(UPLOAD_DIR, file.name)
-        with open(file_path, "wb") as f:
-            f.write(file.getbuffer())
+all_dfs = []
+for file in uploaded_files:
+    file_path = os.path.join(UPLOAD_DIR, file.name)
+    with open(file_path, "wb") as f:
+        f.write(file.getbuffer())
 
-        df = load_data(file, header_row)
-        if df is None:
-            st.warning(f"{file.name} contains no usable data. Please check formatting.")
-            continue
+    df = load_data(file, header_row)
+    if df is None:
+        st.warning(f"{file.name} contains no usable data. Please check formatting.")
+        continue
 
-        df = clean_and_standardize(df)
+    df = clean_and_standardize(df)
+    df["source_file"] = file.name
 
-        if 'status' not in df.columns and 'notes' in df.columns:
-            with st.spinner(f"Tagging statuses for {file.name} using GPT..."):
-                df['status'] = df['notes'].apply(gpt_tag_status)
+    if 'status' not in df.columns and 'notes' in df.columns:
+        with st.spinner(f"Tagging statuses for {file.name} using GPT..."):
+            df['status'] = df['notes'].apply(gpt_tag_status)
 
-        st.info(f"**{file.name}** loaded with columns: {', '.join(df.columns)}")
-        all_dfs.append(df)
-
-    if not all_dfs:
-        st.stop()
-
-    combined_df = pd.concat(all_dfs, ignore_index=True)
-    st.session_state["combined_df"] = combined_df
+    st.info(f"**{file.name}** loaded with columns: {', '.join(str(c) for c in df.columns)}")
+    all_dfs.append(df)
 
     # Load & merge profiles
     if os.path.exists(COMMON_PROFILE_PATH):
@@ -199,71 +196,96 @@ if uploaded_files:
             existing_profiles = json.load(f)
         profiles_df = pd.DataFrame(existing_profiles)
     else:
-        profiles_df = pd.DataFrame(columns=combined_df.columns)
+        profiles_df = pd.DataFrame(columns=df.columns)
 
-    combined_profiles = pd.concat([profiles_df, combined_df], ignore_index=True)
+    combined_profiles = pd.concat([profiles_df, df], ignore_index=True)
     combined_profiles.drop_duplicates(subset=['firm', 'notes'], inplace=True)
-
     combined_profiles.to_json(COMMON_PROFILE_PATH, orient="records", indent=2)
 
+    # Logging
+    rows_added = len(combined_profiles) - len(profiles_df)
+    log_entry = {
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "filename": file.name,
+        "rows_added": rows_added,
+        "total_profiles": len(combined_profiles)
+       }
+
+    LOG_FILE = os.path.join("logs", "upload_log.csv")
+    os.makedirs("logs", exist_ok=True)
+
+    log_df = pd.DataFrame([log_entry])
+    if os.path.exists(LOG_FILE):
+        existing = pd.read_csv(LOG_FILE)
+        log_df = pd.concat([existing, log_df], ignore_index=True)
+    log_df.to_csv(LOG_FILE, index=False)
+
+# ✅ THIS IS THE LINE YOU NEEDED
+if not all_dfs:
+    st.stop()
+
+# ✅ Final merge across all uploaded files
+combined_df = pd.concat(all_dfs, ignore_index=True)
+st.session_state["combined_df"] = combined_df
 
 
-    required_columns = {'firm', 'status', 'notes'}
-    missing_columns = required_columns - set(combined_df.columns)
 
-    if missing_columns:
-        st.warning(f"Missing expected columns: {', '.join(missing_columns)}")
-        available_columns = combined_df.columns.tolist()
-        firm_col = st.selectbox("Select firm column", available_columns, index=available_columns.index('firm') if 'firm' in available_columns else 0, key='firm')
-        status_col = st.selectbox("Select status column", available_columns, index=available_columns.index('status') if 'status' in available_columns else 1, key='status')
-        notes_col = st.selectbox("Select notes column", available_columns, index=available_columns.index('notes') if 'notes' in available_columns else 2, key='notes')
+required_columns = {'firm', 'status', 'notes'}
+missing_columns = required_columns - set(combined_df.columns)
 
-        if len({firm_col, status_col, notes_col}) < 3:
-            st.error("Column selections must be unique. Please choose different columns for firm, status, and notes.")
-            st.stop()
+if missing_columns:
+    st.warning(f"Missing expected columns: {', '.join(missing_columns)}")
+    available_columns = combined_df.columns.tolist()
+    firm_col = st.selectbox("Select firm column", available_columns, index=available_columns.index('firm') if 'firm' in available_columns else 0, key='firm')
+    status_col = st.selectbox("Select status column", available_columns, index=available_columns.index('status') if 'status' in available_columns else 1, key='status')
+    notes_col = st.selectbox("Select notes column", available_columns, index=available_columns.index('notes') if 'notes' in available_columns else 2, key='notes')
 
-        combined_df.rename(columns={firm_col: 'firm', status_col: 'status', notes_col: 'notes'}, inplace=True)
-        combined_df = combined_df.loc[:, ~combined_df.columns.duplicated()]
-    if 'status' not in combined_df.columns and 'notes' in combined_df.columns:
-        st.info("No status column found — tagging using GPT...")
-        combined_df['status'] = combined_df['notes'].apply(gpt_tag_status)
+    if len({firm_col, status_col, notes_col}) < 3:
+        st.error("Column selections must be unique. Please choose different columns for firm, status, and notes.")
+        st.stop()
 
-    summarize_notes = st.sidebar.checkbox("Generate Note Summaries (GPT)", value=False)
-    if summarize_notes and 'notes' in combined_df.columns:
-        st.info("Generating note summaries via GPT...")
-        combined_df['summary'] = combined_df['notes'].apply(gpt_summarize_notes)
+combined_df.rename(columns={firm_col: 'firm', status_col: 'status', notes_col: 'notes'}, inplace=True)
+combined_df = combined_df.loc[:, ~combined_df.columns.duplicated()]
+if 'status' not in combined_df.columns and 'notes' in combined_df.columns:
+    st.info("No status column found — tagging using GPT...")
+    combined_df['status'] = combined_df['notes'].apply(gpt_tag_status)
 
-    st.sidebar.subheader("Filter Investors")
-    if 'status' in combined_df.columns:
-        status_filter = st.sidebar.multiselect("Status", options=combined_df['status'].dropna().unique())
-        if status_filter:
-            combined_df = combined_df[combined_df['status'].isin(status_filter)]
+summarize_notes = st.sidebar.checkbox("Generate Note Summaries (GPT)", value=False)
+if summarize_notes and 'notes' in combined_df.columns:
+    st.info("Generating note summaries via GPT...")
+    combined_df['summary'] = combined_df['notes'].apply(gpt_summarize_notes)
 
-    if 'firm' in combined_df.columns:
-        firm_filter = st.sidebar.multiselect("Firm", options=combined_df['firm'].dropna().unique())
-        if firm_filter:
-            combined_df = combined_df[combined_df['firm'].isin(firm_filter)]
+st.sidebar.subheader("Filter Investors")
+if 'status' in combined_df.columns:
+    status_filter = st.sidebar.multiselect("Status", options=combined_df['status'].dropna().unique())
+    if status_filter:
+        combined_df = combined_df[combined_df['status'].isin(status_filter)]
 
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    cleaned_filename = f"cleaned_investors_{timestamp}.csv"
-    cleaned_path = os.path.join(CLEANED_DIR, cleaned_filename)
-    combined_df.to_csv(cleaned_path, index=False)
+if 'firm' in combined_df.columns:
+    firm_filter = st.sidebar.multiselect("Firm", options=combined_df['firm'].dropna().unique())
+    if firm_filter:
+        combined_df = combined_df[combined_df['firm'].isin(firm_filter)]
 
-    try:
-        combined_df.to_excel(ASSISTANT_EXPORT_XLSX, index=False, engine='openpyxl')
-    except Exception as e:
-        st.warning(f"Failed to write Excel to assistant path: {e}")
+timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+cleaned_filename = f"cleaned_investors_{timestamp}.csv"
+cleaned_path = os.path.join(CLEANED_DIR, cleaned_filename)
+combined_df.to_csv(cleaned_path, index=False)
 
-    try:
-        combined_df.to_json(ASSISTANT_EXPORT_JSON, orient='records', indent=2)
-    except Exception as e:
-        st.warning(f"Failed to write JSON to assistant path: {e}")
+try:
+    combined_df.to_excel(ASSISTANT_EXPORT_XLSX, index=False, engine='openpyxl')
+except Exception as e:
+    st.warning(f"Failed to write Excel to assistant path: {e}")
 
-    csv = combined_df.to_csv(index=False).encode('utf-8')
-    json_data = combined_df.to_json(orient='records', indent=2).encode('utf-8')
+try:
+    combined_df.to_json(ASSISTANT_EXPORT_JSON, orient='records', indent=2)
+except Exception as e:
+    st.warning(f"Failed to write JSON to assistant path: {e}")
 
-    st.download_button("Download Cleaned CSV", csv, "cleaned_investors.csv", "text/csv")
-    st.download_button("Download JSON", json_data, "cleaned_investors.json", "application/json")
+csv = combined_df.to_csv(index=False).encode('utf-8')
+json_data = combined_df.to_json(orient='records', indent=2).encode('utf-8')
+
+st.download_button("Download Cleaned CSV", csv, "cleaned_investors.csv", "text/csv")
+st.download_button("Download JSON", json_data, "cleaned_investors.json", "application/json")
 
 #st.write("Debug: uploaded_files =", uploaded_files)
 
@@ -302,6 +324,35 @@ else:
     # Show investor table
     st.subheader("Investor Table")
     st.dataframe(combined_df)
+
+
+    # --- AUDIT PANEL ---
+    import os
+
+    st.subheader("📁 Profile Store Audit")
+    try:
+        if os.path.exists(COMMON_PROFILE_PATH):
+            with open(COMMON_PROFILE_PATH, "r") as f:
+                profiles = json.load(f)
+            profile_count = len(profiles)
+            latest = profiles[-5:] if profile_count >= 5 else profiles
+
+            st.write(f"**profiles.json** last updated: {datetime.fromtimestamp(os.path.getmtime(COMMON_PROFILE_PATH)).strftime('%Y-%m-%d %H:%M:%S')}")
+            st.write(f"**Total profiles:** {profile_count}")
+            st.write("**Recent additions:**")
+            st.json(latest, expanded=False)
+        else:
+            st.warning("No profiles.json found.")
+    except Exception as e:
+        st.error(f"Audit failed: {e}")
+
+    
+    log_df = pd.DataFrame([log_entry])
+    if os.path.exists(LOG_FILE):
+        existing = pd.read_csv(LOG_FILE)
+        log_df = pd.concat([existing, log_df], ignore_index=True)
+    log_df.to_csv(LOG_FILE, index=False)
+
 
     # Show debug and GPT block
     st.write("Note: active columns =", combined_df.columns.tolist())
